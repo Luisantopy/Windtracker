@@ -1,9 +1,10 @@
+# initial module import
 import minimalmodbus
 import time
 import requests
 
 # Initialize the instrument (Modbus RTU device)
-instrument = minimalmodbus.Instrument('/dev/ttyUSB1', 2)  # port name, slave address
+instrument = minimalmodbus.Instrument('/dev/ttyUSB0', 2)  # port name, slave address
 
 # Configure Modbus communication parameters
 instrument.serial.baudrate = 9600        # Baud rate
@@ -15,7 +16,10 @@ instrument.serial.timeout = 1            # Timeout in seconds (adjust if necessa
 # Set mode to RTU (which is typical for RS485)
 instrument.mode = minimalmodbus.MODE_RTU
 
+
 # Scan multiple registers to find where the wind speed is stored
+# - this is not relevant for measuring, only for setting up the .read_register below
+
 for register in range(1): 
     try:
         value = instrument.read_register(register, 0)  # Register number, 0 decimals
@@ -24,6 +28,7 @@ for register in range(1):
         print(f"Failed to read register {register}")
     except Exception as e:
         print(f"Error: {e}")
+
 
 # Now try to read the register
 while True: # Read until manually stopped
@@ -48,13 +53,14 @@ while True: # Read until manually stopped
     date_str = "&dateutc=now"
     action_str = "&action=updateraw"
 
+    # set up get request to send data wo weather underground
     r= requests.get(
         WUurl +
         WUcreds +
         date_str +
-        "&windspeedmph=" + str(wind_speed_mph) +
+        "&windspeedmph=" + str(wind_speed_mph) + # send wind speed measurements in mph
         action_str)
-    print("Received " + str(r.status_code) + " " + str(r.text))
+    # print("Received " + str(r.status_code) + " " + str(r.text))
 
     # Wait for 2 seconds before the next measurement
     time.sleep(2)
