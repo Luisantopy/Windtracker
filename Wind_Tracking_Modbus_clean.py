@@ -68,34 +68,7 @@ def get_wind_direction(degrees_raw):
         if directions_keys[0] <= degrees_raw >=  directions_keys[1]: # check lower and upper limit of keys
             return direction
         else: return "unknown"
-"""
-# Wind direction conversion (not required, only for converting wind direction to terminal in °)
-def get_wind_direction(degrees_raw):
-    # create dictionary to hold wind directions
-    directions = {
-        (0, 112): "North",
-        (112, 337): "North-northeast",
-        (337, 562): "Northeast",
-        (562, 787): "East-northeast",
-        (787, 1012): "East",
-        (1012, 1237): "East-southeast",
-        (1237, 1462): "Southeast",
-        (1462, 1687): "South-southeast",
-        (1687, 1912): "South",
-        (1912, 2137): "South-southwest",
-        (2137, 2362): "Southwest",
-        (2362, 2587): "West-southwest",
-        (2587, 2812): "West",
-        (2812, 3037): "West-northwest",
-        (3037, 3262): "Northwest",
-        (3262, 3487): "North-northwest",
-        (3487, 3600): "North"
-    }
-    for range_limits, direction in directions.items(): # check dictionary for values
-        if range_limits[0] <= degrees_raw < range_limits[1]: # check if sensor value (degrees_raw) falls between index 0 and 1
-            return direction # returns matching direction
-    return "Unknown"
-"""
+
 # send data to weather underground: 
 # set up variables
 WUurl = "https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?"
@@ -111,6 +84,26 @@ def send_to_weatherunderground(parameter,value): # set up parameter and value to
     response = requests.get(request_url) # create get request
     print(f"Sent data to Weather Underground: {parameter}={value}, Status: {response.status_code}") # not required, only for checking
 
+# function to collect measurements for 2 minutes, create average
+def wind_twominute_avg(wind_speed_mph):
+    twominute_sum = 0
+    for i in range(5):
+        twominute_sum += wind_speed_mph
+        return twominute_sum/4
+
+# function for wind gusts
+def wind_gusts(wind_speed_mph):
+    max_tenminutes = 0
+    for i in range(11):
+        tenminute_gusts = []
+        tenminute_gusts += [int(wind_speed_mph)]
+        max_tenminutes = max(tenminute_gusts)
+    return max_tenminutes
+
+# function for wind gusts directions
+def windgust_directions(max_tenminutes):
+    windgust_direction = get_wind_direction(max_tenminutes)
+    return windgust_direction
 
 # main loop for data collection and transmission
 while True:
@@ -120,18 +113,28 @@ while True:
         wind_direction_deg = int(wind_direction_raw / 10) # divide by ten to get °
         wind_direction = get_wind_direction(wind_direction_raw) # call wind direction function to view raw data in degrees
         print(f"Wind Direction: {wind_direction_deg}° ({wind_direction})") # print wind direction in ° and words
+
         # call function to send wind direction data in degrees to weather underground
         # param = winddir, value = wind_direction_deg
-        send_to_weatherunderground("winddir", wind_direction_deg) 
+        send_to_weatherunderground("winddir", wind_direction_deg) # [0-360 instantaneous wind direction]
 
         # read and process wind speed
         wind_speed_raw = instrument_ws.read_register(0, 1) # get raw values from instrument; register number, number of decimals
         wind_speed_mph = round(wind_speed_raw * 2.23694, 2)  # convert to mph and round 
+        windspdmph_avg2m = wind_twominute_avg(wind_speed_mph)
+        windgusts_mph = wind_gusts(wind_speed_mph)
         print(f"Wind Speed: {wind_speed_raw} m/s, {wind_speed_mph} mph") # print wind direction in m/s and mph
         # call function to send wind direction data in degrees to weather underground
         # param = windspeedmph, value = wind_speed_mph
-        send_to_weatherunderground("windspeedmph", wind_speed_mph)
-    
+        send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
+        send_to_weatherunderground("windspdmph_avg2m", windspdmph_avg2m) # [mph 2 minute average wind speed mph]
+        send_to_weatherunderground("windgustmph_10m", windgusts_mph) # [mph past 10 minutes wind gust mph]
+
+        windgustdir = windgust_directions(windgusts_mph) # unsure if this is correct 
+        send_to_weatherunderground("windgustdir_10m", windgustdir) #  - [0-360 past 10 minutes wind gust direction]
+
+
+
     # set up expections
     except IOError:
         print("Failed to read from instrument")
@@ -139,6 +142,14 @@ while True:
     except Exception as e:
         print(f"Error: {e}")
         break
+   
+    print(f"The 2 minute average is {wind_twominute_avg(wind_speed_mph)} mph.")
+    print(f"The max wind speed over the last 10 minutes was {wind_gusts(wind_speed_mph)} mph.")
 
     # Wait for x seconds before the next measurement
-    time.sleep(60)  
+    time.sleep(30) 
+    
+
+
+
+
