@@ -65,9 +65,9 @@ def get_wind_direction(degrees_raw):
     }
     # check which group of keys the measurement is part of
     for directions_keys, direction in directions.items():
-        if directions_keys[0] <= degrees_raw >=  directions_keys[1]: # check lower and upper limit of keys
+        if directions_keys[0] <= degrees_raw <=  directions_keys[1]: # check lower and upper limit of keys
             return direction
-        else: return "unknown"
+    return "unknown"
 
 # send data to weather underground: 
 # set up variables
@@ -87,25 +87,28 @@ def send_to_weatherunderground(parameter,value): # set up parameter and value to
 # function to collect measurements for 2 minutes, create average
 def wind_twominute_avg(wind_speed_mph):
     twominute_sum = 0
-    for i in range(5):
+    for wind_speed_mph in range(13):
         twominute_sum += wind_speed_mph
-        return twominute_sum/4
+    return twominute_sum/12
 
 # function for wind gusts
 def wind_gusts(wind_speed_mph):
-    max_tenminutes = 0
-    for i in range(11):
-        tenminute_gusts = []
-        tenminute_gusts += [int(wind_speed_mph)]
-        max_tenminutes = max(tenminute_gusts)
-    return max_tenminutes
-
-# function for wind gusts directions
-def windgust_directions(max_tenminutes):
-    windgust_direction = get_wind_direction(max_tenminutes)
-    return windgust_direction
+    maxvalue = 0 # set initial max_value as wind speed
+    tenminute_gusts = [] # create empty list to hold values
+    maxvalue_tenminutes = maxvalue
+    for wind_speed_mph in range(20):
+        while True:
+            if wind_speed_mph > maxvalue:
+                maxvalue = wind_speed_mph
+                tenminute_gusts.append(maxvalue)
+                maxvalue_tenminutes = max(tenminute_gusts)
+            else: break    
+    return maxvalue_tenminutes
 
 # main loop for data collection and transmission
+gust_counter = 0            # Counter to track 5-minute interval for gust data
+avg_2min_counter = 0        # Counter to track 2-minute interval for 2-min avg data
+
 while True:
     try:
         # read and process wind direction
@@ -121,19 +124,31 @@ while True:
         # read and process wind speed
         wind_speed_raw = instrument_ws.read_register(0, 1) # get raw values from instrument; register number, number of decimals
         wind_speed_mph = round(wind_speed_raw * 2.23694, 2)  # convert to mph and round 
+        print(f"Wind Speed: {wind_speed_raw} m/s, {wind_speed_mph} mph") # print wind speed in m/s and mph
+
+        send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
+        
+        # call functions to track measurements
         windspdmph_avg2m = wind_twominute_avg(wind_speed_mph)
         windgusts_mph = wind_gusts(wind_speed_mph)
-        print(f"Wind Speed: {wind_speed_raw} m/s, {wind_speed_mph} mph") # print wind direction in m/s and mph
-        # call function to send wind direction data in degrees to weather underground
-        # param = windspeedmph, value = wind_speed_mph
-        send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
-        send_to_weatherunderground("windspdmph_avg2m", windspdmph_avg2m) # [mph 2 minute average wind speed mph]
-        send_to_weatherunderground("windgustmph_10m", windgusts_mph) # [mph past 10 minutes wind gust mph]
 
-        windgustdir = windgust_directions(windgusts_mph) # unsure if this is correct 
-        send_to_weatherunderground("windgustdir_10m", windgustdir) #  - [0-360 past 10 minutes wind gust direction]
+        # Increment counters
+        gust_counter += 10  # Add 10 seconds for each iteration
+        avg_2min_counter += 10  # Add 10 seconds for each iteration
 
+        # Send 2-minute average wind speed every 2 minutes
+        if avg_2min_counter >= 120:  # 120 seconds = 2 minutes
+            print(f"Wind 2 min avg: {windspdmph_avg2m} mph") # print wind 2 min avg in mph
 
+            send_to_weatherunderground("windspdmph_avg2m", windspdmph_avg2m) # [mph 2 minute average wind speed mph]
+            avg_2min_counter = 0  # Reset counter after sending
+
+        # Send 5-minute gust data every 5 minutes
+        if gust_counter >= 120:  # 300 seconds = 5 minutes
+            print(f"Wind Gusts: {windgusts_mph} mph") # print wind gusts in mph 
+            send_to_weatherunderground("windgustmph", windgusts_mph) #[mph current wind gust, using software specific time period]
+                                        #windgustmph_10m - [mph past 10 minutes wind gust mph] - doesn't work
+            gust_counter = 0  # Reset counter after sending
 
     # set up expections
     except IOError:
@@ -143,11 +158,11 @@ while True:
         print(f"Error: {e}")
         break
    
-    print(f"The 2 minute average is {wind_twominute_avg(wind_speed_mph)} mph.")
-    print(f"The max wind speed over the last 10 minutes was {wind_gusts(wind_speed_mph)} mph.")
+    #print(f"The 2 minute average is {wind_twominute_avg(wind_speed_mph)} mph.")
+    #print(f"The max wind speed over the last 10 minutes was {wind_gusts(wind_speed_mph)} mph.")
 
     # Wait for x seconds before the next measurement
-    time.sleep(30) 
+    time.sleep(10) 
     
 
 
