@@ -2,6 +2,8 @@
 import minimalmodbus
 import time
 import requests
+import statistics
+
 
 # Initialize the instruments 
 def initialize_instruments(port, slave_adress):
@@ -91,10 +93,31 @@ def wind_twominute_avg(wind_speed_mph):
         twominute_sum += wind_speed_mph
     return twominute_sum/12
 
+def reset_wind():
+    global wind_count
+    wind_count = 0
+
+store_speeds = []
+wind_interval = 2
+
 # function for wind gusts
 def wind_gusts(wind_speed_mph):
-    maxvalue = 0 # set initial max_value as wind speed
-    tenminute_gusts = [] # create empty list to hold values
+    start_time = time.time()
+    while time.time() - start_time <= wind_interval:
+        reset_wind()
+    
+        final_speed = wind_speed_mph
+        store_speeds.append(final_speed)
+
+    wind_gust = max(store_speeds)
+    wind_speed = statistics.mean(store_speeds)
+    print(wind_speed, wind_gust)
+    return wind_gust
+
+
+    """
+    print(wind_speed, wind_gust)
+    #tenminute_gusts = [] # create empty list to hold values
     maxvalue_tenminutes = maxvalue
     for wind_speed_mph in range(20):
         while True:
@@ -104,34 +127,51 @@ def wind_gusts(wind_speed_mph):
                 maxvalue_tenminutes = max(tenminute_gusts)
             else: break    
     return maxvalue_tenminutes
+    """
 
 # main loop for data collection and transmission
-gust_counter = 0            # Counter to track 5-minute interval for gust data
-avg_2min_counter = 0        # Counter to track 2-minute interval for 2-min avg data
+#gust_counter = 0            # Counter to track 5-minute interval for gust data
+#avg_2min_counter = 0        # Counter to track 2-minute interval for 2-min avg data
+send_data_counter = 0       # Counter to track 5-minute interval for sending data to weather underground
+
 
 while True:
     try:
-        # read and process wind direction
+        # read and process wind direction every 2 seconds
         wind_direction_raw = instrument_wd.read_register(0, 0, signed=False) # get raw values from instrument; ; register number, number of decimals
         wind_direction_deg = int(wind_direction_raw / 10) # divide by ten to get °
         wind_direction = get_wind_direction(wind_direction_raw) # call wind direction function to view raw data in degrees
         print(f"Wind Direction: {wind_direction_deg}° ({wind_direction})") # print wind direction in ° and words
 
-        # call function to send wind direction data in degrees to weather underground
-        # param = winddir, value = wind_direction_deg
-        send_to_weatherunderground("winddir", wind_direction_deg) # [0-360 instantaneous wind direction]
-
-        # read and process wind speed
+        # read and process wind speed every 2 seconds
         wind_speed_raw = instrument_ws.read_register(0, 1) # get raw values from instrument; register number, number of decimals
         wind_speed_mph = round(wind_speed_raw * 2.23694, 2)  # convert to mph and round 
         print(f"Wind Speed: {wind_speed_raw} m/s, {wind_speed_mph} mph") # print wind speed in m/s and mph
 
-        send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
-        
-        # call functions to track measurements
+        # call functions to read and process wind gusts and 2min avg every 2 seconds
         windspdmph_avg2m = wind_twominute_avg(wind_speed_mph)
         windgusts_mph = wind_gusts(wind_speed_mph)
 
+        # send data to weather underground every 5 minutes
+        # increment counter
+        send_data_counter += 2 # Add 2 seconds for each iteration
+
+        if send_data_counter >= 300: # 300 seconds = 5 minutes
+
+            # call function to send wind direction data in degrees to weather underground
+            # param = winddir, value = wind_direction_deg
+            send_to_weatherunderground("winddir", wind_direction_deg) # [0-360 instantaneous wind direction]
+            send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
+            
+            print(f"Wind 2 min avg: {windspdmph_avg2m} mph") # print wind 2 min avg in mph
+            send_to_weatherunderground("windspdmph_avg2m", windspdmph_avg2m) # [mph 2 minute average wind speed mph]
+            
+            print(f"Wind Gusts: {windgusts_mph} mph") # print wind gusts in mph 
+            send_to_weatherunderground("windgustmph", windgusts_mph) #[mph current wind gust, using software specific time period]
+                                        #windgustmph_10m - [mph past 10 minutes wind gust mph] - doesn't work
+            
+            send_data_counter = 0 # Reset counter after sending
+        """ 
         # Increment counters
         gust_counter += 10  # Add 10 seconds for each iteration
         avg_2min_counter += 10  # Add 10 seconds for each iteration
@@ -149,6 +189,7 @@ while True:
             send_to_weatherunderground("windgustmph", windgusts_mph) #[mph current wind gust, using software specific time period]
                                         #windgustmph_10m - [mph past 10 minutes wind gust mph] - doesn't work
             gust_counter = 0  # Reset counter after sending
+        """
 
     # set up expections
     except IOError:
@@ -162,7 +203,7 @@ while True:
     #print(f"The max wind speed over the last 10 minutes was {wind_gusts(wind_speed_mph)} mph.")
 
     # Wait for x seconds before the next measurement
-    time.sleep(10) 
+    time.sleep(2) 
     
 
 

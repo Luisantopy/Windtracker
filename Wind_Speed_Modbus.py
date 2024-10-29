@@ -6,7 +6,7 @@ import requests
 # Initialize the instrument (Modbus RTU device)
 instrument = minimalmodbus.Instrument('/dev/ttyUSB0', 2)  # port name, slave address
 
-# Configure Modbus communication parameters
+# Configure Wind Direction Modbus communication parameters
 instrument.serial.baudrate = 9600        # Baud rate
 instrument.serial.bytesize = 8           # Number of data bits
 instrument.serial.parity = minimalmodbus.serial.PARITY_NONE  # Parity (None, Even, Odd)
