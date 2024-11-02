@@ -3,9 +3,12 @@ import minimalmodbus
 import time
 import requests
 import statistics
+import board
+import adafruit_dht
 
 
 # Initialize the instruments 
+# for wind:
 def initialize_instruments(port, slave_adress):
     instrument = minimalmodbus.Instrument(port, slave_adress)
     instrument.serial.baudrate = 9600        # Baud rate
@@ -19,6 +22,10 @@ def initialize_instruments(port, slave_adress):
 # call the instruments 
 instrument_wd = initialize_instruments('/dev/ttyUSB1', 2)  # port name, slave address of Wind Direction
 instrument_ws = initialize_instruments('/dev/ttyUSB0', 2)  # port name, slave address of Wind Speed
+
+# Initialize the instruments
+# for temperature: the dht device
+dhtDevice = adafruit_dht.DHT11(board.D17)
 
 # scan registers to find where the wind direction is stored 
 # - this is not relevant for measuring, only for setting up the .read_register below 
@@ -112,8 +119,14 @@ while True:
         wind_gust = max(store_speeds) # get max value from stored values 
         print(f"Wind Gusts: {wind_gust} mph") # print wind gusts in mph 
 
+        # read temperature and humidity
+        temperature_c = dhtDevice.temperature
+        temperature_f = temperature_c * (9 / 5) + 32
+        humidity = dhtDevice.humidity
+
         # call function to send data to weather underground every iteration
         # param = winddir, value = wind_direction_deg 
+        send_to_weatherunderground("tempf", temperature_f) # [F outdoor temperature]
         send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
         send_to_weatherunderground("winddir", wind_direction_deg) # [0-360 instantaneous wind direction]
         send_to_weatherunderground("windgustmph", wind_gust) #[mph current wind gust, using software specific time period]
@@ -135,7 +148,12 @@ while True:
             send_data_counter = 0 # Reset counter after sending
             store_speeds = [wind_speed_mph] # Reset list of stored values to latest wind speed reading after 2 minutes 
 
-    # set up expections
+    # set up exceptions
+    except RuntimeError as error:
+        # Errors happen fairly often, DHT's are hard to read, just keep going
+        print(error.args[0])
+        time.sleep(2.0)
+        continue
     except IOError:
         print("Failed to send data")
         #break
