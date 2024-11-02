@@ -86,54 +86,9 @@ def send_to_weatherunderground(parameter,value): # set up parameter and value to
     response = requests.get(request_url) # create get request
     print(f"Sent data to Weather Underground: {parameter}={value}, Status: {response.status_code}") # not required, only for checking
 
-# function to collect measurements for 2 minutes, create average
-"""def wind_twominute_avg(wind_speed_mph):
-    twominute_sum = 0
-    for wind_speed_mph in range(13):
-        twominute_sum += wind_speed_mph
-    return twominute_sum/12
-
-def reset_wind():
-    global wind_count
-    wind_count = 0
-
-store_speeds = []
-wind_interval = 2
-
-# function for wind gusts
-def wind_gusts(wind_speed_mph):
-    start_time = time.time()
-    while time.time() - start_time <= wind_interval:
-        reset_wind()
-    
-        final_speed = wind_speed_mph
-        store_speeds.append(final_speed)
-
-    wind_gust = max(store_speeds)
-    wind_speed = statistics.mean(store_speeds)
-    print(wind_speed, wind_gust)
-    return wind_gust
-"""    
-
-"""
-    print(wind_speed, wind_gust)
-    #tenminute_gusts = [] # create empty list to hold values
-    maxvalue_tenminutes = maxvalue
-    for wind_speed_mph in range(20):
-        while True:
-            if wind_speed_mph > maxvalue:
-                maxvalue = wind_speed_mph
-                tenminute_gusts.append(maxvalue)
-                maxvalue_tenminutes = max(tenminute_gusts)
-            else: break    
-    return maxvalue_tenminutes
-    """
-
 # main loop for data collection and transmission
-#gust_counter = 0            # Counter to track 5-minute interval for gust data
-#avg_2min_counter = 0        # Counter to track 2-minute interval for 2-min avg data
+
 send_data_counter = 0       # Counter to track 5-minute interval for sending data to weather underground
-#avg_counter = 0
 store_speeds = []   # set up list to store wind speed sensor readings
 
 
@@ -180,41 +135,25 @@ while True:
             send_data_counter = 0 # Reset counter after sending
             store_speeds = [wind_speed_mph] # Reset list of stored values to latest wind speed reading after 2 minutes 
 
-        """ 
-        # Increment counters
-        gust_counter += 10  # Add 10 seconds for each iteration
-        avg_2min_counter += 10  # Add 10 seconds for each iteration
-
-        # Send 2-minute average wind speed every 2 minutes
-        if avg_2min_counter >= 120:  # 120 seconds = 2 minutes
-            print(f"Wind 2 min avg: {windspdmph_avg2m} mph") # print wind 2 min avg in mph
-
-            send_to_weatherunderground("windspdmph_avg2m", windspdmph_avg2m) # [mph 2 minute average wind speed mph]
-            avg_2min_counter = 0  # Reset counter after sending
-
-        # Send 5-minute gust data every 5 minutes
-        if gust_counter >= 120:  # 300 seconds = 5 minutes
-            print(f"Wind Gusts: {windgusts_mph} mph") # print wind gusts in mph 
-            send_to_weatherunderground("windgustmph", windgusts_mph) #[mph current wind gust, using software specific time period]
-                                        #windgustmph_10m - [mph past 10 minutes wind gust mph] - doesn't work
-            gust_counter = 0  # Reset counter after sending
-        """
-
     # set up expections
     except IOError:
-        print("Failed to read from instrument")
-        break
+        print("Failed to send data")
+        #break
     except Exception as e:
         print(f"Error: {e}")
         break
-   
-    #print(f"The 2 minute average is {wind_twominute_avg(wind_speed_mph)} mph.")
-    #print(f"The max wind speed over the last 10 minutes was {wind_gusts(wind_speed_mph)} mph.")
 
     # Wait for x seconds before the next measurement
     time.sleep(2) 
     
-
+# command in shell to run program in background:
+# $ sudo apt screen install
+# session erstellen und skript ausführen: 
+# $ screen -S Wind_Tracking_Modbus_sandbox
+# $ python3 Wind_Tracking_Modbus_sandbox.py
+# wieder zur session verbinden:
+# $ screen -r Wind_Tracking_Modbus_sandbox.py
+ 
 
 
 

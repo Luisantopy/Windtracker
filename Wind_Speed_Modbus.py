@@ -4,7 +4,7 @@ import time
 import requests
 
 # Initialize the instrument (Modbus RTU device)
-instrument = minimalmodbus.Instrument('/dev/ttyUSB0', 2)  # port name, slave address
+instrument = minimalmodbus.Instrument('/dev/ttyUSB3', 2)  # port name, slave address
 
 # Configure Wind Direction Modbus communication parameters
 instrument.serial.baudrate = 9600        # Baud rate

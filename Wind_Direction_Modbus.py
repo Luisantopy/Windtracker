@@ -4,7 +4,7 @@ import time
 import requests
 
 # Initialize the instrument (Modbus RTU device)
-instrument = minimalmodbus.Instrument('/dev/ttyUSB1', 2)  # port name, slave address
+instrument = minimalmodbus.Instrument('/dev/ttyUSB2', 2)  # port name, slave address
 
 # Configure Modbus communication parameters according to wiki
 instrument.serial.baudrate = 9600        # Baud rate
@@ -107,7 +107,7 @@ while True: # Read until an invalid measurement is logged or manually stopped in
     #print("Received " + str(r.status_code) + " " + str(r.text))
 
     # Wait for 10 seconds before the next measurement
-    time.sleep(10)
+    time.sleep(2)
 
 
 
