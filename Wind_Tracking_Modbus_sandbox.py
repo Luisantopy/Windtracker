@@ -1,11 +1,18 @@
-# initial module import
+# command in shell to run program in background:
+# $ sudo apt screen install
+# session erstellen und skript ausführen: 
+# $ screen -S Wind_Tracking_Modbus_sandbox
+# $ python3 Wind_Tracking_Modbus_sandbox.py
+# wieder zur session verbinden:
+# $ screen -r Wind_Tracking_Modbus_sandbox.py
+
+# # initial module import
 import minimalmodbus
 import time
 import requests
 import statistics
 import board
 import adafruit_dht
-
 
 # Initialize the instruments 
 # for wind:
@@ -51,6 +58,8 @@ for register in range(1):
         print(f"Error: {e}")
 
 # function for converting measured wind direction data into North-South values
+# - this is not relevant for sending data to wu, only for reading data in terminal
+
 def get_wind_direction(degrees_raw):
     # dictionary to group measurements:
     directions = {
@@ -87,7 +96,7 @@ WUcreds = f"ID={WU_station_id}&PASSWORD={WU_station_pwd}"
 date_str = "&dateutc=now"
 action_str = "&action=updateraw"
 
-# create function to send both sensor values
+# send different sensor values
 def send_to_weatherunderground(parameter,value): # set up parameter and value to hold sensor measurements tracked below
     request_url = f"{WUurl}{WUcreds}{date_str}&{parameter}={value}{action_str}" # use variables 
     response = requests.get(request_url) # create get request
@@ -97,7 +106,6 @@ def send_to_weatherunderground(parameter,value): # set up parameter and value to
 
 send_data_counter = 0       # Counter to track 5-minute interval for sending data to weather underground
 store_speeds = []   # set up list to store wind speed sensor readings
-
 
 while True:
     try:
@@ -123,10 +131,13 @@ while True:
         temperature_c = dhtDevice.temperature
         temperature_f = temperature_c * (9 / 5) + 32
         humidity = dhtDevice.humidity
+        print(f"Temperature: {temperature_c}°")
+        print(f"Humidity: {humidity}")
 
         # call function to send data to weather underground every iteration
         # param = winddir, value = wind_direction_deg 
         send_to_weatherunderground("tempf", temperature_f) # [F outdoor temperature]
+        send_to_weatherunderground("humidity", humidity)#  - [% outdoor humidity 0-100%]
         send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
         send_to_weatherunderground("winddir", wind_direction_deg) # [0-360 instantaneous wind direction]
         send_to_weatherunderground("windgustmph", wind_gust) #[mph current wind gust, using software specific time period]
@@ -163,15 +174,3 @@ while True:
 
     # Wait for x seconds before the next measurement
     time.sleep(2) 
-    
-# command in shell to run program in background:
-# $ sudo apt screen install
-# session erstellen und skript ausführen: 
-# $ screen -S Wind_Tracking_Modbus_sandbox
-# $ python3 Wind_Tracking_Modbus_sandbox.py
-# wieder zur session verbinden:
-# $ screen -r Wind_Tracking_Modbus_sandbox.py
- 
-
-
-
