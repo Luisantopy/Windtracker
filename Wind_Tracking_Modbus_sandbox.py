@@ -27,8 +27,8 @@ def initialize_instruments(port, slave_adress):
     return instrument
 
 # call the instruments 
-instrument_wd = initialize_instruments('/dev/ttyUSB1', 2)  # port name, slave address of Wind Direction
-instrument_ws = initialize_instruments('/dev/ttyUSB0', 2)  # port name, slave address of Wind Speed
+instrument_wd = initialize_instruments('/dev/ttyUSB0', 2)  # port name, slave address of Wind Direction
+instrument_ws = initialize_instruments('/dev/ttyUSB1', 2)  # port name, slave address of Wind Speed
 
 # Initialize the instruments
 # for temperature: the dht device
