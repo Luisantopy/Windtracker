@@ -1,10 +1,10 @@
 # command in shell to run program in background:
 # $ sudo apt screen install
 # session erstellen und skript ausführen: 
-# $ screen -S Wind_Tracking_Modbus_sandbox
-# $ python3 Wind_Tracking_Modbus_sandbox.py
+# $ screen -S Wind_Tracking_RF
+# $ python3 Wind_Tracking_RF.py
 # wieder zur session verbinden:
-# $ screen -r Wind_Tracking_Modbus_sandbox.py
+# $ screen -r Wind_Tracking_RF.py
 
 # # initial module import
 import minimalmodbus
@@ -95,10 +95,12 @@ WU_station_pwd = "vdmVzZ6C"
 WUcreds = f"ID={WU_station_id}&PASSWORD={WU_station_pwd}"
 date_str = "&dateutc=now"
 action_str = "&action=updateraw"
+rapidfire = "&realtime=1" 
+frequency = "&rtfreq=2.5"
 
 # send different sensor values
 def send_to_weatherunderground(parameter,value): # set up parameter and value to hold sensor measurements tracked below
-    request_url = f"{WUurl}{WUcreds}{date_str}&{parameter}={value}{action_str}" # use variables 
+    request_url = f"{WUurl}{WUcreds}{date_str}&{parameter}={value}{action_str}{rapidfire}{frequency}" # use variables 
     response = requests.get(request_url) # create get request
     print(f"Sent data to Weather Underground: {parameter}={value}, Status: {response.status_code}") # not required, only for checking
 
@@ -106,6 +108,7 @@ def send_to_weatherunderground(parameter,value): # set up parameter and value to
 
 send_data_counter = 0       # Counter to track 5-minute interval for sending data to weather underground
 store_speeds = []   # set up list to store wind speed sensor readings
+store_directions = []   # set up list to store wind direction sensor readings
 
 while True:
     try:
@@ -122,10 +125,9 @@ while True:
 
         # store wind values for wind gust and 2 min avg readings 
         store_speeds.append(wind_speed_mph)
-
-        # process wind gusts
-        wind_gust = max(store_speeds) # get max value from stored values 
-        print(f"Wind Gusts: {wind_gust} mph") # print wind gusts in mph 
+        # store wind values for wind direction 10 min avg readings 
+        store_directions.append(wind_direction_deg)     
+        
 
         # read temperature and humidity
         temperature_c = dhtDevice.temperature
@@ -140,9 +142,7 @@ while True:
         send_to_weatherunderground("humidity", humidity)#  - [% outdoor humidity 0-100%]
         send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
         send_to_weatherunderground("winddir", wind_direction_deg) # [0-360 instantaneous wind direction]
-        send_to_weatherunderground("windgustmph", wind_gust) #[mph current wind gust, using software specific time period]
-                                        #windgustmph_10m - [mph past 10 minutes wind gust mph] - doesn't work
-
+        
         # send avg data to weather underground every 2 minutes
         # increment counter
         send_data_counter += 2 # Add 2 seconds for each iteration
@@ -151,13 +151,19 @@ while True:
 
             # 2min average 
             wind_2minavg = statistics.mean(store_speeds) # get avg value from stored values 
-            print(f"2 min avg is {wind_2minavg}")
-            
             print(f"Wind 2 min avg: {wind_2minavg} mph") # print wind 2 min avg in mph
             send_to_weatherunderground("windspdmph_avg2m", wind_2minavg) # [mph 2 minute average wind speed mph]
-            
+
+            # 2min process wind gusts
+            wind_gust = max(store_speeds) # get max value from stored values 
+            print(f"Wind Gusts: {wind_gust} mph") # print wind gusts in mph
+
+            send_to_weatherunderground("windgustmph", wind_gust) #[mph current wind gust, using software specific time period]
+                                        #windgustmph_10m - [mph past 10 minutes wind gust mph] - doesn't work
+
             send_data_counter = 0 # Reset counter after sending
             store_speeds = [wind_speed_mph] # Reset list of stored values to latest wind speed reading after 2 minutes 
+            store_directions = [wind_direction_deg] # Reset list of stored values to latest wind speed reading after 2 minutes 
 
     # set up exceptions
     except RuntimeError as error:
@@ -173,4 +179,4 @@ while True:
         break
 
     # Wait for x seconds before the next measurement
-    time.sleep(2) 
+    time.sleep(2.5) 

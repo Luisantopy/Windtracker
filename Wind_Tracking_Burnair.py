@@ -1,10 +1,10 @@
 # command in shell to run program in background:
 # $ sudo apt screen install
 # session erstellen und skript ausführen: 
-# $ screen -S Wind_Tracking_Modbus_sandbox
-# $ python3 Wind_Tracking_Modbus_sandbox.py
+# $ screen -S Wind_Tracking_Burnair
+# $ python3 Wind_Tracking_Burnair.py
 # wieder zur session verbinden:
-# $ screen -r Wind_Tracking_Modbus_sandbox.py
+# $ screen -r Wind_Tracking_Burnair.py
 
 # # initial module import
 import minimalmodbus
@@ -165,6 +165,7 @@ while True:
 
             send_data_counter = 0 # Reset counter after sending
             store_speeds = [wind_speed_mph] # Reset list of stored values to latest wind speed reading after 2 minutes 
+            store_directions = [wind_direction_deg] # Reset list of stored values to latest wind speed reading after 2 minutes 
 
     # set up exceptions
     except RuntimeError as error:
