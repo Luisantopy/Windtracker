@@ -123,8 +123,11 @@ while True:
 
         # store wind values for wind gust and 10 min avg readings 
         store_speeds.append(wind_speed_mph) 
+        print(store_speeds)
+
         # store wind values for wind direction 10 min avg readings 
         store_directions.append(wind_direction_deg)
+        print(store_directions)
 
         # read temperature and humidity every 1 seconds
         temperature_c = dhtDevice.temperature
@@ -143,23 +146,24 @@ while True:
         # send avg data to Burnair every 10 minutes
         # increment counter
         send_data_counter += 1 # Add 1 seconds for each iteration
+        print(send_data_counter)
 
-        if send_data_counter >= 600: # 600 seconds = 10 minutes
+        if send_data_counter >= 120: # 600 seconds = 10 minutes, 120 seconds = 2 minutes
 
             # 10min average speed
             wind_10minavg = statistics.mean(store_speeds) # get avg value from stored values 
-            print(f"Wind 10 min avg: {wind_10minavg} mph") # print wind 2 min avg in mph
+            print(f"Wind Speed 10 min avg: {wind_10minavg} mph") # print wind 2 min avg in mph
             
             # 10min process wind gusts
             wind_gust_10avg = max(store_speeds) # get max value from stored values 
-            print(f"Wind Gusts: {wind_gust_10avg} mph") # print wind gusts in mph
+            print(f"Wind Gusts 10 min: {wind_gust_10avg} mph") # print wind gusts in mph
 
             # 10min avg wind direction
             wind_direction_10avg = statistics.mean(store_directions) # get avg value from stored values
-            print(f"Wind Direction 10min avg: {wind_direction_10avg}°") # print wind direction in ° 
+            print(f"Wind Direction 10 min avg: {wind_direction_10avg}°") # print wind direction in ° 
 
             send_to_weatherunderground("windspdmph_avg2m", wind_10minavg) # [mph 2 minute average wind speed mph]
-            send_to_weatherunderground("windgustmph_10m", wind_gust_10avg) #[mph current wind gust, using software specific time period]
+            send_to_weatherunderground("windgustmph", wind_gust_10avg) #[mph current wind gust, using software specific time period]
             send_to_weatherunderground("winddir_avg2m", wind_direction_10avg) # [0-360 10min avg wind direction]
                             #windgustmph_10m - [mph past 10 minutes wind gust mph] - doesn't work
 

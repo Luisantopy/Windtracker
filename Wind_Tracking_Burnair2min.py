@@ -1,10 +1,10 @@
 # command in shell to run program in background:
 # $ sudo apt screen install
 # session erstellen und skript ausführen: 
-# $ screen -S Wind_Tracking_Burnair_RPItemp
-# $ python3 Wind_Tracking_Burnair_RPItemp.py
+# $ screen -S Wind_Tracking_Burnair2min
+# $ python3 Wind_Tracking_Burnair2min.py
 # wieder zur session verbinden:
-# $ screen -r Wind_Tracking_Burnair_RPItemp.py
+# $ screen -r Wind_Tracking_Burnair.py
 
 # # initial module import
 import minimalmodbus
@@ -13,8 +13,6 @@ import requests
 import statistics
 import board
 import adafruit_dht
-from gpiozero import CPUTemperature
-
 
 # Initialize the instruments 
 # for wind:
@@ -60,7 +58,7 @@ for register in range(1):
         print(f"Error: {e}")
 
 # function for converting measured wind direction data into North-South values
-# - this is not relevant for sending data to wu, only for logging data to terminal
+# - this is not relevant for sending data to wu, only for reading data in terminal
 
 def get_wind_direction(degrees_raw):
     # dictionary to group measurements:
@@ -132,47 +130,42 @@ while True:
         #print(store_directions)
 
         # read temperature and humidity every 1 seconds
-        indoortemp_c = CPUTemperature()
-        indoortempf = indoortemp_c.temperature * (9 / 5) + 32
         temperature_c = dhtDevice.temperature
         temperature_f = temperature_c * (9 / 5) + 32
         humidity = dhtDevice.humidity
-        print(f"Temperature: {temperature_c}°C")
+        print(f"Temperature: {temperature_c}°")
         print(f"Humidity: {humidity}")
-        print(f"RPi CPU Temperature: {indoortemp_c}°C")
 
         # call function to send data to weather underground every iteration
         # param = winddir, value = wind_direction_deg 
-        
+        send_to_weatherunderground("tempf", temperature_f) # [F outdoor temperature]
+        send_to_weatherunderground("humidity", humidity)#  - [% outdoor humidity 0-100%]
         #send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
         #send_to_weatherunderground("winddir", wind_direction_deg) # [0-360 instantaneous wind direction]
 
+        # send avg data to Burnair every 2 minutes
         # increment counter
         send_data_counter += 1 # Add 1 seconds for each iteration
         print(send_data_counter)
-        
-        # send data to Burnair every 2 minutes
-        if send_data_counter >= 600: # 600 seconds = 10 minutes, 120 seconds = 2 minutes
+
+        if send_data_counter >= 120: # 600 seconds = 10 minutes, 120 seconds = 2 minutes
 
             # 2min average speed
-            wind_avg = statistics.mean(store_speeds) # get avg value from stored values 
-            print(f"Wind Speed 10 min avg: {wind_avg} mph") # print wind 2 min avg in mph
+            wind_2minavg = statistics.mean(store_speeds) # get avg value from stored values 
+            print(f"Wind Speed 2 min avg: {wind_2minavg} mph") # print wind 2 min avg in mph
             
             # 2min process wind gusts
-            wind_gust_avg = max(store_speeds) # get max value from stored values 
-            print(f"Wind Gusts 10 min: {wind_gust_avg} mph") # print wind gusts in mph
+            wind_gust_2avg = max(store_speeds) # get max value from stored values 
+            print(f"Wind Gusts 2 min: {wind_gust_2avg} mph") # print wind gusts in mph
 
-            # 2min avg wind direction
-            wind_direction_avg = statistics.mean(store_directions) # get avg value from stored values
-            print(f"Wind Direction 10 min avg: {wind_direction_avg}°") # print wind direction in ° 
+            # 10min avg wind direction
+            wind_direction_2avg = statistics.mean(store_directions) # get avg value from stored values
+            print(f"Wind Direction 2 min avg: {wind_direction_2avg}°") # print wind direction in ° 
 
-            send_to_weatherunderground("tempf", temperature_f) # [F outdoor temperature]
-            send_to_weatherunderground("indoortempf", indoortempf) # [F outdoor temperature]
-
-            send_to_weatherunderground("humidity", humidity)#  - [% outdoor humidity 0-100%]
-            send_to_weatherunderground("windspeedmph", wind_avg) # [mph 2 minute average wind speed mph]
-            send_to_weatherunderground("windgustmph", wind_gust_avg) #[mph current wind gust, using software specific time period]
-            send_to_weatherunderground("winddir", wind_direction_avg) # [0-360 10min avg wind direction]
+            send_to_weatherunderground("windspdmph_avg2m", wind_2minavg) # [mph 2 minute average wind speed mph]
+            send_to_weatherunderground("windgustmph", wind_gust_2avg) #[mph current wind gust, using software specific time period]
+            send_to_weatherunderground("winddir_avg2m", wind_direction_2avg) # [0-360 10min avg wind direction]
+                            #windgustmph_10m - [mph past 10 minutes wind gust mph] - doesn't work
 
             send_data_counter = 0 # Reset counter after sending
             store_speeds = [wind_speed_mph] # Reset list of stored values to latest wind speed reading after 2 minutes 
