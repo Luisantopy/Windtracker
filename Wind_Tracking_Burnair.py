@@ -179,7 +179,7 @@ while True:
         send_data_counter += 1 # Add 1 seconds for each iteration
         print(send_data_counter)
 
-        if send_data_counter >= 60: # 600 seconds = 10 minutes
+        if send_data_counter >= 600: # 600 seconds = 10 minutes
 
             # 10 min average speed
             wind_10minavg = statistics.mean(store_speeds) # get avg value from stored values 
@@ -204,7 +204,7 @@ while True:
             # 10 min avg CPU temperature
             cpu_temp_10avg = statistics.mean(store_cpu_temperature)
 
-            # call function to send data to weather underground every 10mins
+            # call function to send data to weather underground every 10mins (parameter, value)
             send_to_weatherunderground("tempf", temperature_10avg)         
             send_to_weatherunderground("humidity", humidity_10avg) #  - [% outdoor humidity 0-100%]
             send_to_weatherunderground("windspeedmph", wind_10minavg) # [mph instantaneous wind speed]
