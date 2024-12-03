@@ -101,24 +101,24 @@ date_str = "&dateutc=now"
 action_str = "&action=updateraw"
 
 # send different sensor values
-def send_to_weatherunderground(parameter,value): # set up parameter and value to hold sensor measurements tracked below
+def send_to_weatherunderground(data): # set up parameter and value to hold sensor measurements tracked below
     # send different sensor values with retry logic
     max_retries = 10
     retry_delay = 1  # seconds
     attempt = 0
 
-    # Ensure the value has 1 decimal place
-    value = round(value, 1)
+    # Construct the URL with multiple parameters
+    parameters = "&".join([f"{key}={round(value, 1)}" for key, value in data.items()])
+    request_url = f"{WUurl}{WUcreds}{date_str}&{parameters}{action_str}"
 
     while attempt < max_retries:
         try:
-            request_url = f"{WUurl}{WUcreds}{date_str}&{parameter}={value}{action_str}" # use variables 
             response = requests.get(request_url) # create get request
             if response.status_code == 200:
-                print(f"Sent data to Weather Underground: {parameter}={value}, Status: {response.status_code}") 
+                print(f"Sent data to Weather Underground: {data}, Status: {response.status_code}") 
                 return True #successful send
             else: 
-                print(f"Failed to send data: {parameter}={value}, Status: {response.status_code}. Retrying...")
+                print(f"Failed to send data: {data}, Status: {response.status_code}. Retrying...")
         except requests.RequestException as e: 
             print(f"Request failed: {e}. Retrying...")
         
@@ -209,14 +209,27 @@ while True:
 
             # 10 min avg CPU temperature
             cpu_temp_10avg = statistics.mean(store_cpu_temperature)
+            send_to_weatherunderground_R("indoortempf", cpu_temp_10avg)
 
+            data_to_send = {
+                "tempf": temperature_10avg,
+                "humidity": humidity_10avg,
+                "windspeedmph": wind_10minavg,
+                "winddir": wind_direction_10avg,
+                "windgustmph": wind_gust_10avg
+            }
+            # Send the data
+            send_to_weatherunderground(data_to_send)
+
+            '''
             # call function to send data to weather underground every 10mins (parameter, value)
             send_to_weatherunderground("tempf", temperature_10avg)         
             send_to_weatherunderground("humidity", humidity_10avg) #  - [% outdoor humidity 0-100%]
             send_to_weatherunderground("windspeedmph", wind_10minavg) # [mph instantaneous wind speed]
             send_to_weatherunderground("winddir", wind_direction_10avg) # [0-360 instantaneous wind direction]
             send_to_weatherunderground("windgustmph", wind_gust_10avg) #[mph current wind gust, using software specific time period]
-            send_to_weatherunderground_R("indoortempf", cpu_temp_10avg)
+            
+            '''
 
             # Reset counter and list of stored values after 10 minutes
             send_data_counter = 0 
