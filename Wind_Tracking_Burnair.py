@@ -106,6 +106,10 @@ def send_to_weatherunderground(parameter,value): # set up parameter and value to
     max_retries = 10
     retry_delay = 1  # seconds
     attempt = 0
+
+    # Ensure the value has 1 decimal place
+    value = round(value, 1)
+
     while attempt < max_retries:
         try:
             request_url = f"{WUurl}{WUcreds}{date_str}&{parameter}={value}{action_str}" # use variables 
@@ -123,6 +127,8 @@ def send_to_weatherunderground(parameter,value): # set up parameter and value to
 
 # send CPU temp 
 def send_to_weatherunderground_R(parameter,value): # set up parameter and value to hold sensor measurements tracked below
+    # Ensure the value has 1 decimal place
+    value = round(value, 1)
     request_url = f"{WUurl}{WUcreds_R}{date_str}&{parameter}={value}{action_str}" # use variables 
     response = requests.get(request_url) # create get request
     print(f"Sent data to Weather Underground: {parameter}={value}, Status: {response.status_code}") # not required, only for checking
@@ -162,7 +168,7 @@ while True:
         except ValueError: 
             continue
 
-        print(store_temperatures)
+        #print(store_temperatures)
         print(f"Temperature: {temperature_c}°")
 
         humidity = dhtDevice.humidity
