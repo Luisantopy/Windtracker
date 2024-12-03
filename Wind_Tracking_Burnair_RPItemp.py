@@ -34,7 +34,7 @@ instrument_ws = initialize_instruments('/dev/ttyUSB1', 2)  # port name, slave ad
 
 # Initialize the instruments
 # for temperature: the dht device
-dhtDevice = adafruit_dht.DHT11(board.D17)
+# dhtDevice = adafruit_dht.DHT11(board.D17)
 
 # scan registers to find where the wind direction is stored 
 # - this is not relevant for measuring, only for setting up the .read_register below 
@@ -92,8 +92,8 @@ def get_wind_direction(degrees_raw):
 # send data to weather underground: 
 # set up variables
 WUurl = "https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?"
-WU_station_id = "IMOLLI25"
-WU_station_pwd = "vdmVzZ6C"
+WU_station_id = "IMOLLI27"
+WU_station_pwd = "jEzgBS2a"
 WUcreds = f"ID={WU_station_id}&PASSWORD={WU_station_pwd}"
 date_str = "&dateutc=now"
 action_str = "&action=updateraw"
@@ -109,41 +109,31 @@ def send_to_weatherunderground(parameter,value): # set up parameter and value to
 send_data_counter = 0       # Counter to track 10-minute interval for sending data to Burnair
 store_speeds = []   # set up list to store wind speed sensor readings
 store_directions = []   # set up list to store wind direction sensor readings
+store_temperatures = []
 
 while True:
     try: # outer loop runs every 1 seconds
-        # read and process wind direction every 1 seconds
-        wind_direction_raw = instrument_wd.read_register(0, 0, signed=False) # get raw values from instrument; ; register number, number of decimals
-        wind_direction_deg = int(wind_direction_raw / 10) # divide by ten to get °
-        wind_direction = get_wind_direction(wind_direction_raw) # call wind direction function to view raw data in degrees
-        print(f"Wind Direction: {wind_direction_deg}° ({wind_direction})") # print wind direction in ° and words
-
-        # read and process wind speed every 1 seconds
-        wind_speed_raw = instrument_ws.read_register(0, 1) # get raw values from instrument; register number, number of decimals
-        wind_speed_mph = round(wind_speed_raw * 2.23694, 2)  # convert to mph and round 
-        print(f"Wind Speed: {wind_speed_raw} m/s, {wind_speed_mph} mph") # print wind speed in m/s and mph
-
-        # store wind values for wind gust and 2 min avg readings 
-        store_speeds.append(wind_speed_mph) 
-        #print(store_speeds)
-
-        # store wind values for wind direction 2 min avg readings 
-        store_directions.append(wind_direction_deg)
-        #print(store_directions)
-
+        
         # read temperature and humidity every 1 seconds
         indoortemp_c = CPUTemperature()
         indoortempf = indoortemp_c.temperature * (9 / 5) + 32
-        temperature_c = dhtDevice.temperature
-        temperature_f = temperature_c * (9 / 5) + 32
-        humidity = dhtDevice.humidity
-        print(f"Temperature: {temperature_c}°C")
-        print(f"Humidity: {humidity}")
+        #temperature_c = dhtDevice.temperature
+        #temperature_f = temperature_c * (9 / 5) + 32
+        #humidity = dhtDevice.humidity
+        #print(f"Temperature: {temperature_c}°C")
+        #print(f"Humidity: {humidity}")
         print(f"RPi CPU Temperature: {indoortemp_c}°C")
+
+        # store wind values for wind direction 2 min avg readings 
+        store_temperatures.append(indoortempf)
+        print(store_temperatures)
 
         # call function to send data to weather underground every iteration
         # param = winddir, value = wind_direction_deg 
-        
+        #send_to_weatherunderground("indoortempf", indoortempf) # [F outdoor temperature]
+
+        #send_to_weatherunderground("humidity", humidity)#  - [% outdoor humidity 0-100%]
+
         #send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
         #send_to_weatherunderground("winddir", wind_direction_deg) # [0-360 instantaneous wind direction]
 
@@ -151,32 +141,16 @@ while True:
         send_data_counter += 1 # Add 1 seconds for each iteration
         print(send_data_counter)
         
-        # send data to Burnair every 2 minutes
+        # send data to Burnair every 10 minutes
         if send_data_counter >= 600: # 600 seconds = 10 minutes, 120 seconds = 2 minutes
 
-            # 2min average speed
-            wind_avg = statistics.mean(store_speeds) # get avg value from stored values 
-            print(f"Wind Speed 10 min avg: {wind_avg} mph") # print wind 2 min avg in mph
-            
-            # 2min process wind gusts
-            wind_gust_avg = max(store_speeds) # get max value from stored values 
-            print(f"Wind Gusts 10 min: {wind_gust_avg} mph") # print wind gusts in mph
-
-            # 2min avg wind direction
-            wind_direction_avg = statistics.mean(store_directions) # get avg value from stored values
-            print(f"Wind Direction 10 min avg: {wind_direction_avg}°") # print wind direction in ° 
-
-            send_to_weatherunderground("tempf", temperature_f) # [F outdoor temperature]
-            send_to_weatherunderground("indoortempf", indoortempf) # [F outdoor temperature]
-
-            send_to_weatherunderground("humidity", humidity)#  - [% outdoor humidity 0-100%]
-            send_to_weatherunderground("windspeedmph", wind_avg) # [mph 2 minute average wind speed mph]
-            send_to_weatherunderground("windgustmph", wind_gust_avg) #[mph current wind gust, using software specific time period]
-            send_to_weatherunderground("winddir", wind_direction_avg) # [0-360 10min avg wind direction]
+            # 10min average temperature
+            rpi_temp_avg = statistics.mean(store_temperatures) # get avg value from stored values 
+            print(f"CPU 10 min avg temperature: {rpi_temp_avg}°C") # print 10min avg CPU temp 
+            send_to_weatherunderground("tempf", indoortempf) # [F outdoor temperature]
 
             send_data_counter = 0 # Reset counter after sending
-            store_speeds = [wind_speed_mph] # Reset list of stored values to latest wind speed reading after 2 minutes 
-            store_directions = [wind_direction_deg] # Reset list of stored values to latest wind speed reading after 2 minutes 
+            store_temperatures = [indoortempf] # Reset list of stored values to latest wind speed reading after 2 minutes 
 
     # set up exceptions
     except RuntimeError as error:

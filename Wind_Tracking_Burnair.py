@@ -13,6 +13,7 @@ import requests
 import statistics
 import board
 import adafruit_dht
+from gpiozero import CPUTemperature
 
 # Initialize the instruments 
 # for wind:
@@ -90,15 +91,39 @@ def get_wind_direction(degrees_raw):
 # send data to weather underground: 
 # set up variables
 WUurl = "https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?"
-WU_station_id = "IMOLLI25"
-WU_station_pwd = "vdmVzZ6C"
+WU_station_id = "IMOLLI28"
+WU_station_pwd = "SZYeoboH"
+WU_station_id_R = "IMOLLI27"
+WU_station_pwd_R = "jEzgBS2a"
 WUcreds = f"ID={WU_station_id}&PASSWORD={WU_station_pwd}"
+WUcreds_R = f"ID={WU_station_id_R}&PASSWORD={WU_station_pwd_R}"
 date_str = "&dateutc=now"
 action_str = "&action=updateraw"
 
 # send different sensor values
 def send_to_weatherunderground(parameter,value): # set up parameter and value to hold sensor measurements tracked below
-    request_url = f"{WUurl}{WUcreds}{date_str}&{parameter}={value}{action_str}" # use variables 
+    # send different sensor values with retry logic
+    max_retries = 10
+    retry_delay = 1  # seconds
+    attempt = 0
+    while attempt < max_retries:
+        try:
+            request_url = f"{WUurl}{WUcreds}{date_str}&{parameter}={value}{action_str}" # use variables 
+            response = requests.get(request_url) # create get request
+            if response.status_code == 200:
+                print(f"Sent data to Weather Underground: {parameter}={value}, Status: {response.status_code}") 
+                return True #successful send
+            else: 
+                print(f"Failed to send data: {parameter}={value}, Status: {response.status_code}. Retrying...")
+        except requests.RequestException as e: 
+            print(f"Request failed: {e}. Retrying...")
+        
+        attempt += 1
+        time.sleep(retry_delay)
+
+# send CPU temp 
+def send_to_weatherunderground_R(parameter,value): # set up parameter and value to hold sensor measurements tracked below
+    request_url = f"{WUurl}{WUcreds_R}{date_str}&{parameter}={value}{action_str}" # use variables 
     response = requests.get(request_url) # create get request
     print(f"Sent data to Weather Underground: {parameter}={value}, Status: {response.status_code}") # not required, only for checking
 
@@ -107,69 +132,93 @@ def send_to_weatherunderground(parameter,value): # set up parameter and value to
 send_data_counter = 0       # Counter to track 10-minute interval for sending data to Burnair
 store_speeds = []   # set up list to store wind speed sensor readings
 store_directions = []   # set up list to store wind direction sensor readings
+store_temperatures = []
+store_humidity = []
+store_cpu_temperature = [] 
 
 while True:
     try: # outer loop runs every 1 seconds
-        # read and process wind direction every 1 seconds
+        # read and process wind direction 
         wind_direction_raw = instrument_wd.read_register(0, 0, signed=False) # get raw values from instrument; ; register number, number of decimals
         wind_direction_deg = int(wind_direction_raw / 10) # divide by ten to get °
         wind_direction = get_wind_direction(wind_direction_raw) # call wind direction function to view raw data in degrees
+        # store wind values for wind direction 10 min avg readings 
+        store_directions.append(wind_direction_deg)
         print(f"Wind Direction: {wind_direction_deg}° ({wind_direction})") # print wind direction in ° and words
 
-        # read and process wind speed every 1 seconds
+        # read and process wind speed 
         wind_speed_raw = instrument_ws.read_register(0, 1) # get raw values from instrument; register number, number of decimals
         wind_speed_mph = round(wind_speed_raw * 2.23694, 2)  # convert to mph and round 
         print(f"Wind Speed: {wind_speed_raw} m/s, {wind_speed_mph} mph") # print wind speed in m/s and mph
-
         # store wind values for wind gust and 10 min avg readings 
         store_speeds.append(wind_speed_mph) 
-        print(store_speeds)
-
-        # store wind values for wind direction 10 min avg readings 
-        store_directions.append(wind_direction_deg)
-        print(store_directions)
-
-        # read temperature and humidity every 1 seconds
+        
+        # read temperature and humidity 
         temperature_c = dhtDevice.temperature
         temperature_f = temperature_c * (9 / 5) + 32
-        humidity = dhtDevice.humidity
+        # exception handling for temperature 
+        try: 
+            store_temperatures.append(temperature_f)
+        except ValueError: 
+            continue
+
+        print(store_temperatures)
         print(f"Temperature: {temperature_c}°")
+
+        humidity = dhtDevice.humidity
+        store_humidity.append(humidity)
         print(f"Humidity: {humidity}")
 
-        # call function to send data to weather underground every iteration
-        # param = winddir, value = wind_direction_deg 
-        send_to_weatherunderground("tempf", temperature_f) # [F outdoor temperature]
-        send_to_weatherunderground("humidity", humidity)#  - [% outdoor humidity 0-100%]
-        send_to_weatherunderground("windspeedmph", wind_speed_mph) # [mph instantaneous wind speed]
-        send_to_weatherunderground("winddir", wind_direction_deg) # [0-360 instantaneous wind direction]
+        # read CPU temperature
+        indoortemp_c = CPUTemperature()
+        indoortempf = indoortemp_c.temperature * (9 / 5) + 32
+        store_cpu_temperature.append(indoortempf)
 
-        # send avg data to Burnair every 10 minutes
+        # send avg/ max data to Weather Underground every 10 minutes
         # increment counter
         send_data_counter += 1 # Add 1 seconds for each iteration
         print(send_data_counter)
 
-        if send_data_counter >= 120: # 600 seconds = 10 minutes, 120 seconds = 2 minutes
+        if send_data_counter >= 60: # 600 seconds = 10 minutes
 
-            # 10min average speed
+            # 10 min average speed
             wind_10minavg = statistics.mean(store_speeds) # get avg value from stored values 
             print(f"Wind Speed 10 min avg: {wind_10minavg} mph") # print wind 2 min avg in mph
             
-            # 10min process wind gusts
+            # 10 min process wind gusts
             wind_gust_10avg = max(store_speeds) # get max value from stored values 
             print(f"Wind Gusts 10 min: {wind_gust_10avg} mph") # print wind gusts in mph
 
-            # 10min avg wind direction
+            # 10 min avg wind direction
             wind_direction_10avg = statistics.mean(store_directions) # get avg value from stored values
             print(f"Wind Direction 10 min avg: {wind_direction_10avg}°") # print wind direction in ° 
 
-            send_to_weatherunderground("windspdmph_avg2m", wind_10minavg) # [mph 2 minute average wind speed mph]
-            send_to_weatherunderground("windgustmph", wind_gust_10avg) #[mph current wind gust, using software specific time period]
-            send_to_weatherunderground("winddir_avg2m", wind_direction_10avg) # [0-360 10min avg wind direction]
-                            #windgustmph_10m - [mph past 10 minutes wind gust mph] - doesn't work
+            # 10 min avg temperature 
+            temperature_10avg = statistics.mean(store_temperatures)
+            print(f"Outside temperature 10min avg: {temperature_10avg}°F")
 
-            send_data_counter = 0 # Reset counter after sending
-            store_speeds = [wind_speed_mph] # Reset list of stored values to latest wind speed reading after 2 minutes 
-            store_directions = [wind_direction_deg] # Reset list of stored values to latest wind speed reading after 2 minutes 
+            # 10 min avg humidity
+            humidity_10avg = statistics.mean(store_humidity)
+            print(f"Humidity 10min avg: {humidity_10avg}°F")
+
+            # 10 min avg CPU temperature
+            cpu_temp_10avg = statistics.mean(store_cpu_temperature)
+
+            # call function to send data to weather underground every 10mins
+            send_to_weatherunderground("tempf", temperature_10avg)         
+            send_to_weatherunderground("humidity", humidity_10avg) #  - [% outdoor humidity 0-100%]
+            send_to_weatherunderground("windspeedmph", wind_10minavg) # [mph instantaneous wind speed]
+            send_to_weatherunderground("winddir", wind_direction_10avg) # [0-360 instantaneous wind direction]
+            send_to_weatherunderground("windgustmph", wind_gust_10avg) #[mph current wind gust, using software specific time period]
+            send_to_weatherunderground_R("indoortempf", cpu_temp_10avg)
+
+            # Reset counter and list of stored values after 10 minutes
+            send_data_counter = 0 
+            store_speeds = [wind_speed_mph] 
+            store_directions = [wind_direction_deg]  
+            store_temperatures = [temperature_f]
+            store_humidity = [humidity]
+            store_cpu_temperature = [indoortempf]
 
     # set up exceptions
     except RuntimeError as error:
@@ -184,5 +233,5 @@ while True:
         print(f"Error: {e}")
         break
 
-    # Wait for x seconds before the next measurement
+    # Repeat interval for reading sensor values every second
     time.sleep(1) 
