@@ -209,7 +209,8 @@ while True:
 
             # 10 min avg CPU temperature
             cpu_temp_10avg = statistics.mean(store_cpu_temperature)
-            send_to_weatherunderground_R("indoortempf", cpu_temp_10avg)
+            print(f"CPU 10 min avg temperature: {cpu_temp_10avg}°")
+            send_to_weatherunderground_R("tempf", cpu_temp_10avg)
 
             data_to_send = {
                 "tempf": temperature_10avg,
@@ -220,16 +221,6 @@ while True:
             }
             # Send the data
             send_to_weatherunderground(data_to_send)
-
-            '''
-            # call function to send data to weather underground every 10mins (parameter, value)
-            send_to_weatherunderground("tempf", temperature_10avg)         
-            send_to_weatherunderground("humidity", humidity_10avg) #  - [% outdoor humidity 0-100%]
-            send_to_weatherunderground("windspeedmph", wind_10minavg) # [mph instantaneous wind speed]
-            send_to_weatherunderground("winddir", wind_direction_10avg) # [0-360 instantaneous wind direction]
-            send_to_weatherunderground("windgustmph", wind_gust_10avg) #[mph current wind gust, using software specific time period]
-            
-            '''
 
             # Reset counter and list of stored values after 10 minutes
             send_data_counter = 0 
