@@ -6,13 +6,15 @@
 # wieder zur session verbinden:
 # $ screen -r Wind_Tracking_Burnair.py
 
+# requirements: python .venv, ch340 driver installed 
+
 # # initial module import
-import minimalmodbus
+import minimalmodbus    # to read wind sensors
 import time
-import requests
-import statistics
-import board
-import adafruit_dht
+import requests         # to send data 
+import statistics       # for avg and max values
+import board            # for dht sensor
+import adafruit_dht     # for dht sensor
 from gpiozero import CPUTemperature
 
 # Initialize the instruments 
@@ -88,23 +90,27 @@ def get_wind_direction(degrees_raw):
             return direction
     return "unknown"
 
+# fahrenheit calculator
+def celsius_to_fahrenheit(celsius):
+    return celsius * (9 / 5) + 32
+
 # send data to weather underground: 
 # set up variables
 WUurl = "https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?"
 WU_station_id = "IMOLLI28"
 WU_station_pwd = "SZYeoboH"
-WU_station_id_R = "IMOLLI27"
-WU_station_pwd_R = "jEzgBS2a"
 WUcreds = f"ID={WU_station_id}&PASSWORD={WU_station_pwd}"
-WUcreds_R = f"ID={WU_station_id_R}&PASSWORD={WU_station_pwd_R}"
 date_str = "&dateutc=now"
 action_str = "&action=updateraw"
+WU_station_id_R = "IMOLLI27" # 2nd station for tracking cpu temperature
+WU_station_pwd_R = "jEzgBS2a"
+WUcreds_R = f"ID={WU_station_id_R}&PASSWORD={WU_station_pwd_R}"
 
 # send different sensor values
-def send_to_weatherunderground(data): # set up parameter and value to hold sensor measurements tracked below
+def send_to_weatherunderground(data): # accepts data values as dictionary 
     # send different sensor values with retry logic
     max_retries = 10
-    retry_delay = 1  # seconds
+    retry_delay = 3  # seconds
     attempt = 0
 
     # Construct the URL with multiple parameters
@@ -125,19 +131,25 @@ def send_to_weatherunderground(data): # set up parameter and value to hold senso
         attempt += 1
         time.sleep(retry_delay)
 
+        # If all retries fail, log failure and return False
+    print(f"Failed to send data to Weather Underground after {max_retries} attempts.")
+    return False
+
 # send CPU temp 
 def send_to_weatherunderground_R(parameter,value): # set up parameter and value to hold sensor measurements tracked below
     # Ensure the value has 1 decimal place
     value = round(value, 1)
-    request_url = f"{WUurl}{WUcreds_R}{date_str}&{parameter}={value}{action_str}" # use variables 
+    request_url = f"{WUurl}{WUcreds_R}{date_str}&{parameter}={value}{action_str}" 
     response = requests.get(request_url) # create get request
-    print(f"Sent data to Weather Underground: {parameter}={value}, Status: {response.status_code}") # not required, only for checking
+    print(f"Sent CPU temp to Weather Underground: {parameter}={value}, Status: {response.status_code}") 
 
 # main loop for data collection and transmission
 
-send_data_counter = 0       # Counter to track 10-minute interval for sending data to Burnair
-store_speeds = []   # set up list to store wind speed sensor readings
-store_directions = []   # set up list to store wind direction sensor readings
+send_data_counter = 0       # Counter to track 10-minute interval for sending data 
+
+# set up lists to store sensor readings
+store_speeds = []           
+store_directions = []       
 store_temperatures = []
 store_humidity = []
 store_cpu_temperature = [] 
@@ -161,7 +173,7 @@ while True:
         
         # read temperature and humidity 
         temperature_c = dhtDevice.temperature
-        temperature_f = temperature_c * (9 / 5) + 32
+        temperature_f = celsius_to_fahrenheit(temperature_c)
         # exception handling for temperature 
         try: 
             store_temperatures.append(temperature_f)
@@ -177,7 +189,7 @@ while True:
 
         # read CPU temperature
         indoortemp_c = CPUTemperature()
-        indoortempf = indoortemp_c.temperature * (9 / 5) + 32
+        indoortempf = celsius_to_fahrenheit(indoortemp_c.temperature)
         store_cpu_temperature.append(indoortempf)
 
         # send avg/ max data to Weather Underground every 10 minutes
@@ -221,6 +233,10 @@ while True:
             }
             # Send the data
             send_to_weatherunderground(data_to_send)
+
+            # if no successful send after 10 retries:
+            if not send_to_weatherunderground(data_to_send):
+                print("Data transmission failed. Continuing with the next cycle.")
 
             # Reset counter and list of stored values after 10 minutes
             send_data_counter = 0 
