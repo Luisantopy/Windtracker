@@ -257,7 +257,7 @@ while True:
         #break
     except Exception as e:
         print(f"Error: {e}")
-        break
+        #break
 
     # Repeat interval for reading sensor values every second
     time.sleep(1) 
