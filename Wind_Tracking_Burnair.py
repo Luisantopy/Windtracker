@@ -1,21 +1,21 @@
-# command in shell to run program in background:
+# requirements: python 13.11, .venv activated, ch340 driver installed, modules installed
+# 
+# run program in background:
 # $ sudo apt screen install
-# session erstellen und skript ausführen: 
-# $ screen -S Wind_Tracking_Burnair
-# $ python3 Wind_Tracking_Burnair.py
-# wieder zur session verbinden:
-# $ screen -r Wind_Tracking_Burnair.py
+# create session and run skript: 
+# $ screen -S filename
+# $ python3 filename.py
+# connect to session:
+# $ screen -r filename.py
 
-# requirements: python .venv, ch340 driver installed 
-
-# # initial module import
+# initial module import
 import minimalmodbus    # to read wind sensors
 import time
 import requests         # to send data 
 import statistics       # for avg and max values
 import board            # for dht sensor
 import adafruit_dht     # for dht sensor
-from gpiozero import CPUTemperature
+from gpiozero import CPUTemperature # for tracking CPU temperature
 
 # Initialize the instruments 
 # for wind:
@@ -26,20 +26,20 @@ def initialize_instruments(port, slave_adress):
     instrument.serial.parity = minimalmodbus.serial.PARITY_NONE  # Parity (None, Even, Odd)
     instrument.serial.stopbits = 1           # Stop bits
     instrument.serial.timeout = 1            # Timeout in seconds
-    instrument.mode = minimalmodbus.MODE_RTU # Set mode to RTU (which is typical for RS485)
+    instrument.mode = minimalmodbus.MODE_RTU # Set mode to RTU (for RS485)
     return instrument
 
-# call the instruments 
-instrument_wd = initialize_instruments('/dev/ttyUSB0', 2)  # port name, slave address of Wind Direction
+# call wind instruments (check slave address with sudo ls -l /dev)
+instrument_wd = initialize_instruments('/dev/ttyUSB0', 2)  # port name, slave address of Wind Direction 
 instrument_ws = initialize_instruments('/dev/ttyUSB1', 2)  # port name, slave address of Wind Speed
 
 # Initialize the instruments
-# for temperature: the dht device
+# for temperature: dht device
 dhtDevice = adafruit_dht.DHT11(board.D17)
 
 # scan registers to find where the wind direction is stored 
-# - this is not relevant for measuring, only for setting up the .read_register below 
-for register in range(1):  
+# - this is not relevant for measuring, only for setting up the .read_register below and ensuring correct use of registers
+for register in range(1):  # increase range if register != 1
     try:
         value = instrument_wd.read_register(register, 0)  # Register number, 0 decimals
         print(f"Register Wind Direction {register}: {value}")
@@ -48,10 +48,9 @@ for register in range(1):
     except Exception as e:
         print(f"Error: {e}")
 
-# Scan multiple registers to find where the wind speed is stored
+# scan registers to find where the wind speed is stored
 # - this is not relevant for measuring, only for setting up the .read_register below
-
-for register in range(1): 
+for register in range(1): # increase range if register != 1
     try:
         value = instrument_ws.read_register(register, 0)  # Register number, 0 decimals
         print(f"Register Wind Speed {register}: {value}")
@@ -94,7 +93,7 @@ def get_wind_direction(degrees_raw):
 def celsius_to_fahrenheit(celsius):
     return celsius * (9 / 5) + 32
 
-# send data to weather underground: 
+# data to weather underground: 
 # set up variables
 WUurl = "https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?"
 WU_station_id = "IMOLLI28"
@@ -106,15 +105,15 @@ WU_station_id_R = "IMOLLI27" # 2nd station for tracking cpu temperature
 WU_station_pwd_R = "jEzgBS2a"
 WUcreds_R = f"ID={WU_station_id_R}&PASSWORD={WU_station_pwd_R}"
 
-# send different sensor values
+# function to send different sensor values
 def send_to_weatherunderground(data): # accepts data values as dictionary 
     # send different sensor values with retry logic
     max_retries = 10
     retry_delay = 3  # seconds
     attempt = 0
 
-    # Construct the URL with multiple parameters
-    parameters = "&".join([f"{key}={round(value, 1)}" for key, value in data.items()])
+    # Construct URL with multiple parameters
+    parameters = "&".join([f"{key}={round(value, 1)}" for key, value in data.items()]) # send rounded value
     request_url = f"{WUurl}{WUcreds}{date_str}&{parameters}{action_str}"
 
     while attempt < max_retries:
@@ -135,7 +134,7 @@ def send_to_weatherunderground(data): # accepts data values as dictionary
     print(f"Failed to send data to Weather Underground after {max_retries} attempts.")
     return False
 
-# send CPU temp 
+# function to send CPU temp 
 def send_to_weatherunderground_R(parameter,value): # set up parameter and value to hold sensor measurements tracked below
     # Ensure the value has 1 decimal place
     value = round(value, 1)
@@ -143,54 +142,79 @@ def send_to_weatherunderground_R(parameter,value): # set up parameter and value 
     response = requests.get(request_url) # create get request
     print(f"Sent CPU temp to Weather Underground: {parameter}={value}, Status: {response.status_code}") 
 
+# funtion to store sensor readings for 10 minute avg/ max values
+def store_readings(sensor_reading):
+    store_values = []
+    store_values.append(sensor_reading)
+    return store_values
+
+# function to calculate the mean value from 10 minute stored readings
+def mean_values(store_values):
+    mean_value = statistics.mean(store_values)
+    return mean_value
+
+# function to calculate the max value from 10 minute stored readings
+def max_values(store_values):
+    max_value = max(store_values)
+    return max_value
+
+# function to reset list of stored values after 10 minutes
+def reset(store_values):
+    store_values = []
+    return store_values
+
 # main loop for data collection and transmission
 
 send_data_counter = 0       # Counter to track 10-minute interval for sending data 
 
 # set up lists to store sensor readings
-store_speeds = []           
-store_directions = []       
-store_temperatures = []
-store_humidity = []
-store_cpu_temperature = [] 
+#store_speeds = []           
+#store_directions = []       
+#store_temperatures = []
+#store_humidity = []
+#store_cpu_temperature = [] 
 
 while True:
     try: # outer loop runs every 1 seconds
         # read and process wind direction 
-        wind_direction_raw = instrument_wd.read_register(0, 0, signed=False) # get raw values from instrument; ; register number, number of decimals
-        wind_direction_deg = int(wind_direction_raw / 10) # divide by ten to get °
-        wind_direction = get_wind_direction(wind_direction_raw) # call wind direction function to view raw data in degrees
+        wind_direction_raw = instrument_wd.read_register(0, 0, signed=False) # get raw values from instrument; register number, number of decimals
+        wind_direction_deg = int(wind_direction_raw / 10) # divide by ten to get ° - this value is required by the API
+        wind_direction = get_wind_direction(wind_direction_raw) # call wind direction function to get raw data in degrees
+        print(f"Wind Direction: {wind_direction_deg}° ({wind_direction})") 
         # store wind values for wind direction 10 min avg readings 
-        store_directions.append(wind_direction_deg)
-        print(f"Wind Direction: {wind_direction_deg}° ({wind_direction})") # print wind direction in ° and words
+        store_directions = store_readings(wind_direction_deg)
+        #store_directions.append(wind_direction_deg)
 
         # read and process wind speed 
         wind_speed_raw = instrument_ws.read_register(0, 1) # get raw values from instrument; register number, number of decimals
-        wind_speed_mph = round(wind_speed_raw * 2.23694, 2)  # convert to mph and round 
-        print(f"Wind Speed: {wind_speed_raw} m/s, {wind_speed_mph} mph") # print wind speed in m/s and mph
+        wind_speed_mph = round(wind_speed_raw * 2.23694, 2)  # convert to mph and round - this value is required by the API
+        print(f"Wind Speed: {wind_speed_raw} m/s, {wind_speed_mph} mph") 
         # store wind values for wind gust and 10 min avg readings 
-        store_speeds.append(wind_speed_mph) 
+        store_speeds = store_readings(wind_speed_mph)
+        #store_speeds.append(wind_speed_mph) 
         
         # read temperature and humidity 
         temperature_c = dhtDevice.temperature
-        temperature_f = celsius_to_fahrenheit(temperature_c)
-        # exception handling for temperature 
+        temperature_f = celsius_to_fahrenheit(temperature_c) # - this value is required by the API
+        # exception handling for temperature because dht sensor often fails reading properly 
         try: 
-            store_temperatures.append(temperature_f)
+            #store_temperatures.append(temperature_f) # store temperature values for 10 min avg readings 
+            store_temperatures = store_readings(temperature_f)
         except ValueError: 
-            continue
+            continue # back to main program, incorrect values not stored in list 
 
-        #print(store_temperatures)
         print(f"Temperature: {temperature_c}°")
 
-        humidity = dhtDevice.humidity
-        store_humidity.append(humidity)
+        humidity = dhtDevice.humidity  # - this value is required by the API
+        store_humidity = store_readings(humidity)
+        #store_humidity.append(humidity) # store humidity values for 10 min avg readings 
         print(f"Humidity: {humidity}")
 
         # read CPU temperature
         indoortemp_c = CPUTemperature()
         indoortempf = celsius_to_fahrenheit(indoortemp_c.temperature)
-        store_cpu_temperature.append(indoortempf)
+        store_cpu_temperature = store_readings(indoortempf)
+        #store_cpu_temperature.append(indoortempf) # store temperature values for 10 min avg readings 
 
         # send avg/ max data to Weather Underground every 10 minutes
         # increment counter
@@ -200,29 +224,34 @@ while True:
         if send_data_counter >= 600: # 600 seconds = 10 minutes
 
             # 10 min average speed
-            wind_10minavg = statistics.mean(store_speeds) # get avg value from stored values 
-            print(f"Wind Speed 10 min avg: {wind_10minavg} mph") # print wind 2 min avg in mph
+            wind_10minavg = mean_values(store_speeds)
+            #wind_10minavg = statistics.mean(store_speeds) # get avg value from stored values 
+            print(f"Wind Speed 10 min avg: {wind_10minavg} mph") 
             
             # 10 min process wind gusts
-            wind_gust_10avg = max(store_speeds) # get max value from stored values 
-            print(f"Wind Gusts 10 min: {wind_gust_10avg} mph") # print wind gusts in mph
+            wind_gust_10avg = max_values(store_speeds)
+            #wind_gust_10avg = max(store_speeds) # get max value from stored values 
+            print(f"Wind Gusts 10 min: {wind_gust_10avg} mph") 
 
             # 10 min avg wind direction
-            wind_direction_10avg = statistics.mean(store_directions) # get avg value from stored values
-            print(f"Wind Direction 10 min avg: {wind_direction_10avg}°") # print wind direction in ° 
+            wind_direction_10avg = mean_values(store_directions)
+            #wind_direction_10avg = statistics.mean(store_directions) # get avg value from stored values
+            print(f"Wind Direction 10 min avg: {wind_direction_10avg}°")  
 
             # 10 min avg temperature 
-            temperature_10avg = statistics.mean(store_temperatures)
+            temperature_10avg = mean_values(store_temperatures)
+            #temperature_10avg = statistics.mean(store_temperatures) # get avg value from stored values
             print(f"Outside temperature 10min avg: {temperature_10avg}°F")
 
             # 10 min avg humidity
-            humidity_10avg = statistics.mean(store_humidity)
+            humidity_10avg = statistics.mean(store_humidity) # get avg value from stored values
             print(f"Humidity 10min avg: {humidity_10avg}°F")
 
             # 10 min avg CPU temperature
-            cpu_temp_10avg = statistics.mean(store_cpu_temperature)
+            cpu_temp_10avg = mean_values(store_cpu_temperature)
+            #cpu_temp_10avg = statistics.mean(store_cpu_temperature) # get avg value from stored values
             print(f"CPU 10 min avg temperature: {cpu_temp_10avg}°")
-            send_to_weatherunderground_R("tempf", cpu_temp_10avg)
+            send_to_weatherunderground_R("tempf", cpu_temp_10avg) # send cpu temp 10 min avg to weather underground
 
             data_to_send = {
                 "tempf": temperature_10avg,
@@ -231,33 +260,35 @@ while True:
                 "winddir": wind_direction_10avg,
                 "windgustmph": wind_gust_10avg
             }
-            # Send the data
+            # send the data
             send_to_weatherunderground(data_to_send)
 
-            # if no successful send after 10 retries:
+            # if not successful send after 10 retries:
             if not send_to_weatherunderground(data_to_send):
                 print("Data transmission failed. Continuing with the next cycle.")
 
-            # Reset counter and list of stored values after 10 minutes
+            # reset counter and list of stored values after 10 minutes
             send_data_counter = 0 
-            store_speeds = [wind_speed_mph] 
-            store_directions = [wind_direction_deg]  
-            store_temperatures = [temperature_f]
-            store_humidity = [humidity]
-            store_cpu_temperature = [indoortempf]
+            reset(store_speeds)
+            reset(store_directions)
+            reset(store_temperatures)
+            reset(store_humidity)
+            reset(store_cpu_temperature)
+            #store_speeds = [wind_speed_mph] 
+            #store_directions = [wind_direction_deg]  
+            #store_temperatures = [temperature_f]
+            #store_humidity = [humidity]
+            #store_cpu_temperature = [indoortempf]
 
     # set up exceptions
     except RuntimeError as error:
         # Errors happen fairly often, DHT's are hard to read, just keep going
         print(error.args[0])
-        #time.sleep(2.0)
         continue
     except IOError:
         print("Failed to send data")
-        #break
     except Exception as e:
         print(f"Error: {e}")
-        #break
 
-    # Repeat interval for reading sensor values every second
+    # repeat interval for reading sensor values every second
     time.sleep(1) 
