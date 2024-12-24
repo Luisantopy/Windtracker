@@ -17,6 +17,7 @@ import statistics       # for avg and max values
 import board            # for dht sensor
 import adafruit_dht     # for dht sensor
 from gpiozero import CPUTemperature # for tracking CPU temperature
+from collections import deque
 
 # Initialize the instruments 
 # for wind:
@@ -89,6 +90,9 @@ def get_wind_direction(degrees_raw):
         if directions_keys[0] <= degrees_raw <=  directions_keys[1]: # check lower and upper limit of keys
             return direction
     return "unknown"
+
+# initialize deque for wind gusts with a maximum length of 3 (for 3-second rolling average)
+wind_gusts_3sec = deque(maxlen=3)
 
 # fahrenheit calculator
 def celsius_to_fahrenheit(celsius):
@@ -170,7 +174,8 @@ def reset(store_values):
 send_data_counter = 0       # Counter to track 10-minute interval for sending data 
 
 # set up lists to store sensor readings
-store_speeds = []           
+store_speeds = []       
+store_gusts = []    
 store_directions = []       
 store_temperatures = []
 store_humidity = []
@@ -195,22 +200,35 @@ while True:
         #store_speeds = store_readings(wind_speed_mph, store_speeds)
         store_speeds.append(wind_speed_mph) 
         
+        # process wind gusts: 
+        # calculate 3-second rolling average for wind gusts
+        wind_gusts_3sec.append(wind_speed_mph)  # append the latest wind speed to the deque
+        if len(wind_gusts_3sec) == 3:  # ensure we have 3 values in the deque
+            wind_gust_3sec_avg = sum(wind_gusts_3sec) / len(wind_gusts_3sec)  # calculate the average of the last 3 values
+            print(f"Wind Gusts (3-second avg): {round(wind_gust_3sec_avg, 2)} mph")
+            store_gusts.append(wind_gust_3sec_avg)
+
         # read temperature and humidity 
-        temperature_c = dhtDevice.temperature
-        temperature_f = celsius_to_fahrenheit(temperature_c) # - this value is required by the API
-        # exception handling for temperature because dht sensor often fails reading properly 
         try: 
+            temperature_c = dhtDevice.temperature
+            temperature_f = celsius_to_fahrenheit(temperature_c) # - this value is required by the API
+            # exception handling for temperature because dht sensor often fails reading properly 
+       
             store_temperatures.append(temperature_f) # store temperature values for 10 min avg readings 
             #store_temperatures = store_readings(temperature_f, store_temperatures)
+            print(f"Temperature: {temperature_c}°")
         except ValueError: 
             continue # back to main program, incorrect values not stored in list 
 
-        print(f"Temperature: {temperature_c}°")
+        
 
-        humidity = dhtDevice.humidity  # - this value is required by the API
-        #store_humidity = store_readings(humidity, store_humidity)
-        store_humidity.append(humidity) # store humidity values for 10 min avg readings 
-        print(f"Humidity: {humidity}")
+        try: 
+            humidity = dhtDevice.humidity  # - this value is required by the API
+            #store_humidity = store_readings(humidity, store_humidity)
+            store_humidity.append(humidity) # store humidity values for 10 min avg readings 
+            print(f"Humidity: {humidity}")
+        except ValueError: 
+            continue
 
         # read CPU temperature
         indoortemp_c = CPUTemperature()
@@ -232,7 +250,7 @@ while True:
             
             # 10 min process wind gusts
             #wind_gust_10avg = max_values(store_speeds)
-            wind_gust_10avg = max(store_speeds) # get max value from stored values 
+            wind_gust_10avg = max(store_gusts) # get max value from stored values 
             print(f"Wind Gusts 10 min: {wind_gust_10avg} mph") 
 
             # 10 min avg wind direction
@@ -281,6 +299,8 @@ while True:
             store_cpu_temperature = reset(store_cpu_temperature)'''
 
             store_speeds = [] 
+            store_gusts = []
+            #wind_gusts_3sec.clear()  # reset the deque for the next cycle
             store_directions = []  
             store_temperatures = []
             store_humidity = []
